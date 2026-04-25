@@ -1,9 +1,3 @@
-const QUALITY_MAP = {
-  127: '8K', 126: '杜比视界', 125: 'HDR', 120: '4K',
-  116: '1080P 60帧', 112: '1080P+', 80: '1080P',
-  64: '720P', 32: '480P', 16: '360P'
-};
-
 let videoInfo = null;
 let currentBvid = null;
 
@@ -47,7 +41,7 @@ async function init() {
     return;
   }
 
-  const match = tab.url.match(/bilibili\.com\/video\/(BV[\w]+)/);
+  const match = tab.url.match(/bilibili\.com\/video\/(BV[A-Za-z0-9_-]+)/);
   if (!match) {
     showSection('not-video');
     return;
@@ -69,6 +63,7 @@ async function init() {
 
 function renderVideoInfo(info, qualities) {
   $('cover').src = info.pic?.replace('http:', 'https:') || '';
+  $('cover').alt = info.title || '视频封面';
   $('title').textContent = info.title;
   $('owner').textContent = `UP主: ${info.owner?.name || '未知'}`;
   $('stat').textContent = [
@@ -83,21 +78,8 @@ function renderVideoInfo(info, qualities) {
     $('page-select').innerHTML = pages.map((p, i) =>
       `<option value="${i}">P${i + 1}: ${p.part}</option>`
     ).join('');
-
-    $('page-select').addEventListener('change', async () => {
-      const idx = parseInt($('page-select').value);
-      try {
-        const data = await sendMessage({ action: 'popupGetData', pageIndex: idx });
-        videoInfo = data.info;
-        if (data.qualities?.length) {
-          $('quality-select').innerHTML = data.qualities.map(q =>
-            `<option value="${q.qn}">${q.desc}</option>`
-          ).join('');
-        }
-      } catch (e) {
-        $('status').textContent = '切换分P失败: ' + e.message;
-      }
-    });
+  } else {
+    $('pages-section').classList.add('hidden');
   }
 
   if (qualities?.length) {
@@ -107,12 +89,32 @@ function renderVideoInfo(info, qualities) {
   }
 }
 
+// 分P切换
+$('page-select')?.addEventListener('change', async () => {
+  if (!videoInfo || !currentBvid) return;
+  const idx = parseInt($('page-select').value);
+  $('status').textContent = '切换分P...';
+  try {
+    const data = await sendMessage({ action: 'popupGetData', pageIndex: idx });
+    videoInfo = data.info;
+    if (data.qualities?.length) {
+      $('quality-select').innerHTML = data.qualities.map(q =>
+        `<option value="${q.qn}">${q.desc}</option>`
+      ).join('');
+    }
+    $('status').textContent = '';
+  } catch (e) {
+    $('status').textContent = '切换失败: ' + e.message;
+  }
+});
+
 async function startDownload() {
   if (!videoInfo || !currentBvid) return;
 
   const pageIdx = $('page-select') ? parseInt($('page-select').value) : 0;
   const qn = parseInt($('quality-select').value);
-  const page = videoInfo.pages?.[pageIdx] || videoInfo.pages?.[0];
+  const pages = videoInfo.pages || [];
+  const page = pages[pageIdx] || pages[0];
   const cid = page?.cid || videoInfo.cid;
 
   $('download-btn').disabled = true;
@@ -122,24 +124,15 @@ async function startDownload() {
   try {
     const streamData = await sendMessage({ action: 'popupFetchStreamUrl', bvid: currentBvid, cid, qn });
 
-    let downloadUrl = '';
-    if (streamData.durl && streamData.durl.length > 0) {
-      downloadUrl = streamData.durl[0].url;
-    } else if (streamData.dash?.video?.length) {
-      downloadUrl = streamData.dash.video[0].baseUrl || streamData.dash.video[0].base_url;
-    }
-
-    if (!downloadUrl) throw new Error('未找到下载地址');
-
     const qualityName = $('quality-select').options[$('quality-select').selectedIndex].textContent;
-    const partName = videoInfo.pages.length > 1 ? `_P${pageIdx + 1}` : '';
+    const partName = pages.length > 1 ? `_P${pageIdx + 1}` : '';
     const filename = `${videoInfo.title}${partName}_${qualityName}.mp4`;
 
-    $('status').textContent = '下载中(大文件可能需要等待)...';
+    $('status').textContent = '下载中...';
 
-    await sendMessage({ action: 'download', url: downloadUrl, filename });
+    await sendMessage({ action: 'download', streamData, filename });
 
-    $('status').textContent = '下载已开始!';
+    $('status').textContent = '已开始下载!';
     $('status').style.color = '#52c41a';
   } catch (err) {
     $('status').textContent = '失败: ' + err.message;

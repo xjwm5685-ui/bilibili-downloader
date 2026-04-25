@@ -11,7 +11,7 @@
     },
     "condition": {
       "urlFilter": "||bilivideo.com",
-      "resourceTypes": ["main_frame", "sub_frame", "stylesheet", "script", "image", "font", "object", "xmlhttprequest", "ping", "media", "websocket", "other"]
+      "resourceTypes": ["xmlhttprequest", "media", "other"]
     }
   },
   {
@@ -26,7 +26,7 @@
     },
     "condition": {
       "urlFilter": "||hdslb.com",
-      "resourceTypes": ["main_frame", "sub_frame", "stylesheet", "script", "image", "font", "object", "xmlhttprequest", "ping", "media", "websocket", "other"]
+      "resourceTypes": ["xmlhttprequest", "media", "other"]
     }
   }
 ]

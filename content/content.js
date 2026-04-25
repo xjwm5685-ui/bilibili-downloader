@@ -1,14 +1,11 @@
-const QUALITY_MAP = {
-  127: '8K', 126: '杜比视界', 125: 'HDR', 120: '4K',
-  116: '1080P 60帧', 112: '1080P+', 80: '1080P',
-  64: '720P', 32: '480P', 16: '360P'
-};
-
 let videoInfo = null;
 let panelVisible = false;
+let lastUrl = '';
+let closePanelHandler = null;
+let observerTimer = null;
 
 function getBvid() {
-  const match = location.pathname.match(/\/video\/(BV[\w]+)/);
+  const match = location.pathname.match(/\/video\/(BV[A-Za-z0-9_-]+)/);
   return match ? match[1] : null;
 }
 
@@ -53,14 +50,23 @@ function injectDownloadBtn() {
   document.body.appendChild(btn);
 }
 
+function removePanel() {
+  const panel = document.getElementById('bili-dl-panel');
+  if (panel) panel.remove();
+  panelVisible = false;
+  if (closePanelHandler) {
+    document.removeEventListener('click', closePanelHandler);
+    closePanelHandler = null;
+  }
+}
+
 async function onDownloadClick(e) {
   e.stopPropagation();
 
   const bvid = getBvid();
   if (!bvid) return alert('未检测到视频');
 
-  const existing = document.getElementById('bili-dl-panel');
-  if (existing) { existing.remove(); panelVisible = false; return; }
+  if (panelVisible) { removePanel(); return; }
 
   try {
     const pageIndex = getPageIndex();
@@ -73,13 +79,15 @@ async function onDownloadClick(e) {
 }
 
 function showPanel(bvid, info, qualities, pageIndex) {
+  removePanel();
+
   const panel = document.createElement('div');
   panel.id = 'bili-dl-panel';
 
   const pages = info.pages || [];
 
   let qualityOptions = '';
-  if (qualities && qualities.length) {
+  if (qualities?.length) {
     qualityOptions = qualities.map(q =>
       `<option value="${q.qn}">${q.desc}</option>`
     ).join('');
@@ -124,9 +132,7 @@ function showPanel(bvid, info, qualities, pageIndex) {
   document.body.appendChild(panel);
   panelVisible = true;
 
-  document.getElementById('bili-dl-close').addEventListener('click', () => {
-    panel.remove(); panelVisible = false;
-  });
+  document.getElementById('bili-dl-close').addEventListener('click', removePanel);
   document.getElementById('bili-dl-download').addEventListener('click', startDownload);
 
   // 分P切换
@@ -148,6 +154,14 @@ function showPanel(bvid, info, qualities, pageIndex) {
       }
     });
   }
+
+  // 只在面板打开时监听外部点击
+  closePanelHandler = (e) => {
+    if (!e.target.closest('#bili-dl-panel') && !e.target.closest('#bili-dl-btn')) {
+      removePanel();
+    }
+  };
+  setTimeout(() => document.addEventListener('click', closePanelHandler), 100);
 }
 
 async function startDownload() {
@@ -160,7 +174,8 @@ async function startDownload() {
 
   const pageIndex = pageSelect ? parseInt(pageSelect.value) : getPageIndex();
   const qn = parseInt(qualitySelect.value);
-  const page = videoInfo.pages?.[pageIndex] || videoInfo.pages?.[0];
+  const pages = videoInfo.pages || [];
+  const page = pages[pageIndex] || pages[0];
   const cid = page?.cid || videoInfo.cid;
 
   statusEl.textContent = '获取下载地址...';
@@ -169,45 +184,25 @@ async function startDownload() {
   try {
     const streamData = await sendMessage({ action: 'pageFetchStreamUrl', bvid, cid, qn });
 
-    let downloadUrl = '';
-    if (streamData.durl && streamData.durl.length > 0) {
-      downloadUrl = streamData.durl[0].url;
-    } else if (streamData.dash?.video?.length) {
-      downloadUrl = streamData.dash.video[0].baseUrl || streamData.dash.video[0].base_url;
-    }
-
-    if (!downloadUrl) throw new Error('未找到下载地址');
-
     const qualityName = qualitySelect.options[qualitySelect.selectedIndex].textContent;
-    const partName = videoInfo.pages.length > 1 ? `_P${pageIndex + 1}` : '';
+    const partName = pages.length > 1 ? `_P${pageIndex + 1}` : '';
     const filename = `${videoInfo.title}${partName}_${qualityName}.mp4`;
 
     statusEl.textContent = '下载中...';
 
-    await sendMessage({ action: 'download', url: downloadUrl, filename });
+    // Pass full streamData to service worker for DASH audio merge
+    await sendMessage({ action: 'download', streamData, filename });
 
     statusEl.textContent = '已开始下载!';
     statusEl.style.color = '#52c41a';
-    setTimeout(() => {
-      const panel = document.getElementById('bili-dl-panel');
-      if (panel) { panel.remove(); panelVisible = false; }
-    }, 2000);
+    setTimeout(removePanel, 2000);
   } catch (err) {
     statusEl.textContent = '下载失败: ' + err.message;
     statusEl.style.color = '#ff4d4f';
   }
 }
 
-document.addEventListener('click', (e) => {
-  if (panelVisible &&
-      !e.target.closest('#bili-dl-panel') &&
-      !e.target.closest('#bili-dl-btn')) {
-    const panel = document.getElementById('bili-dl-panel');
-    if (panel) { panel.remove(); panelVisible = false; }
-  }
-});
-
-// Listen for download progress from service worker
+// 下载进度监听
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.type === 'dlProgress') {
     const statusEl = document.getElementById('bili-dl-status');
@@ -218,11 +213,37 @@ chrome.runtime.onMessage.addListener((msg) => {
   }
 });
 
-injectDownloadBtn();
-
-const observer = new MutationObserver(() => {
-  if (!document.getElementById('bili-dl-btn')) {
+// SPA 导航检测：URL 变化时重置状态
+function checkNavigation() {
+  if (location.href !== lastUrl) {
+    lastUrl = location.href;
+    videoInfo = null;
+    removePanel();
     injectDownloadBtn();
   }
+}
+
+// 监听 title 变化（B站 SPA 导航会改 title）
+const titleEl = document.querySelector('title');
+if (titleEl) {
+  new MutationObserver(() => {
+    clearTimeout(observerTimer);
+    observerTimer = setTimeout(checkNavigation, 200);
+  }).observe(titleEl, { childList: true });
+}
+
+// 监听 body 子元素变化（debounced）
+const bodyObserver = new MutationObserver(() => {
+  clearTimeout(observerTimer);
+  observerTimer = setTimeout(() => {
+    if (!document.getElementById('bili-dl-btn')) injectDownloadBtn();
+  }, 300);
 });
-observer.observe(document.body, { childList: true });
+bodyObserver.observe(document.body, { childList: true });
+
+// popstate 用于处理浏览器前进后退
+window.addEventListener('popstate', () => setTimeout(checkNavigation, 100));
+
+// 初始化
+lastUrl = location.href;
+injectDownloadBtn();

@@ -48,7 +48,7 @@ async function runInPageWorld(tabId, fn, args) {
   return results?.[0]?.result;
 }
 
-// blob → base64 (ArrayBuffer, faster than FileReader for large files)
+// blob → base64 data URL (chunk-based to avoid stack overflow)
 async function blobToDataUrl(blob) {
   const buf = await blob.arrayBuffer();
   const bytes = new Uint8Array(buf);
@@ -58,39 +58,65 @@ async function blobToDataUrl(blob) {
     const chunk = bytes.subarray(i, i + chunkSize);
     binary += String.fromCharCode.apply(null, chunk);
   }
-  const base64 = btoa(binary);
-  const mime = blob.type || 'video/mp4';
-  return `data:${mime};base64,${base64}`;
+  return `data:${blob.type || 'video/mp4'};base64,${btoa(binary)}`;
 }
 
-// Download via service worker fetch + data URL
-async function downloadVideo(streamUrl, filename) {
-  const safeName = filename.replace(/[\\/:*?"<>|]/g, '_').substring(0, 200);
-
-  // Notify content script of progress
-  const notify = (text) => {
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (tabs[0]) chrome.tabs.sendMessage(tabs[0].id, { type: 'dlProgress', text }).catch(() => {});
-    });
-  };
-
-  notify('正在下载视频数据...');
-  const resp = await fetch(streamUrl, {
+// Fetch with Referer, return blob
+async function fetchBlob(url) {
+  const resp = await fetch(url, {
     headers: { 'Referer': 'https://www.bilibili.com' }
   });
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-
   const ct = resp.headers.get('content-type') || '';
   if (ct.includes('text/html')) throw new Error('CDN返回了HTML，可能需要登录');
+  return resp.blob();
+}
 
-  notify('正在读取视频数据...');
-  const blob = await resp.blob();
+// Send progress to the tab that initiated the download
+function notifyTab(tabId, text) {
+  if (tabId) chrome.tabs.sendMessage(tabId, { type: 'dlProgress', text }).catch(() => {});
+}
+
+// Download: handle both durl (legacy) and dash (video+audio merge)
+async function downloadVideo(streamData, filename, tabId) {
+  const safeName = filename.replace(/[\\/:*?"<>|]/g, '_').substring(0, 200);
+
+  let blob;
+
+  if (streamData.durl?.length) {
+    // Legacy format: single file
+    notifyTab(tabId, '正在下载视频...');
+    blob = await fetchBlob(streamData.durl[0].url);
+  } else if (streamData.dash) {
+    // DASH format: download video + audio, concatenate
+    const videoStream = streamData.dash.video?.[0];
+    const audioStream = streamData.dash.audio?.[0];
+
+    if (!videoStream) throw new Error('未找到视频流');
+
+    const videoUrl = videoStream.baseUrl || videoStream.base_url;
+    const audioUrl = audioStream ? (audioStream.baseUrl || audioStream.base_url) : null;
+
+    notifyTab(tabId, '正在下载视频流...');
+    const videoBlob = await fetchBlob(videoUrl);
+
+    if (audioUrl) {
+      notifyTab(tabId, '正在下载音频流...');
+      const audioBlob = await fetchBlob(audioUrl);
+      blob = new Blob([videoBlob, audioBlob], { type: videoBlob.type || 'video/mp4' });
+    } else {
+      blob = videoBlob;
+    }
+  } else {
+    throw new Error('未找到下载地址');
+  }
+
   const sizeMB = (blob.size / 1024 / 1024).toFixed(1);
+  notifyTab(tabId, `正在处理 ${sizeMB}MB...`);
 
-  notify(`正在处理 ${sizeMB}MB 数据...`);
   const dataUrl = await blobToDataUrl(blob);
+  notifyTab(tabId, '正在保存...');
 
-  notify('正在保存文件...');
   return chrome.downloads.download({ url: dataUrl, filename: safeName });
 }
 
@@ -135,9 +161,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 
   if (msg.action === 'download') {
-    downloadVideo(msg.url, msg.filename)
+    // Capture sender tab ID for progress notifications
+    const tabId = sender.tab?.id;
+    downloadVideo(msg.streamData, msg.filename, tabId)
       .then(id => sendResponse({ success: true, id }))
       .catch(err => sendResponse({ success: false, error: err.message }));
     return true;
   }
+
+  // Fallback for unknown actions
+  sendResponse({ success: false, error: 'unknown action: ' + msg.action });
 });
