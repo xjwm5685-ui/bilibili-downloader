@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bili Downloader</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <svg class="logo" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+      </svg>
+      <h1>Bili Downloader</h1>
+    </div>
+
+    <div id="not-video" class="message hidden">
+      <p>请在哔哩哔哩视频页面使用此插件</p>
+      <p class="hint">支持 bilibili.com/video/BV... 格式</p>
+    </div>
+
+    <div id="loading" class="message hidden">
+      <div class="spinner"></div>
+      <p>正在获取视频信息...</p>
+    </div>
+
+    <div id="error" class="message hidden">
+      <p id="error-text"></p>
+      <button id="retry-btn" class="btn-retry">重试</button>
+    </div>
+
+    <div id="video-info" class="hidden">
+      <div class="video-card">
+        <img id="cover" class="cover" src="" alt="">
+        <div class="meta">
+          <h2 id="title" class="title"></h2>
+          <p id="owner" class="owner"></p>
+          <p id="stat" class="stat"></p>
+        </div>
+      </div>
+
+      <div id="pages-section" class="section hidden">
+        <label>分P选择:</label>
+        <select id="page-select" class="select"></select>
+      </div>
+
+      <div class="section">
+        <label>画质选择:</label>
+        <select id="quality-select" class="select">
+          <option value="80">1080P</option>
+          <option value="64">720P</option>
+          <option value="32">480P</option>
+          <option value="16">360P</option>
+        </select>
+      </div>
+
+      <button id="download-btn" class="btn-download">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+        </svg>
+        下载视频
+      </button>
+
+      <div id="status" class="status"></div>
+    </div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

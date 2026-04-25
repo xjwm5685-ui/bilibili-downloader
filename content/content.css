@@ -1,0 +1,166 @@
+#bili-dl-btn {
+  position: fixed;
+  top: 120px;
+  right: 20px;
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #00a1d6, #0088cc);
+  color: #fff;
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 14px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  box-shadow: 0 4px 12px rgba(0, 161, 214, 0.4);
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+#bili-dl-btn:hover {
+  background: linear-gradient(135deg, #00b4eb, #0099dd);
+  box-shadow: 0 6px 16px rgba(0, 161, 214, 0.6);
+  transform: translateY(-1px);
+}
+
+#bili-dl-btn:active {
+  transform: translateY(0);
+}
+
+#bili-dl-btn svg {
+  flex-shrink: 0;
+}
+
+#bili-dl-panel {
+  position: fixed;
+  top: 160px;
+  right: 20px;
+  z-index: 99998;
+  width: 320px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  overflow: hidden;
+  animation: bili-dl-slideIn 0.2s ease;
+}
+
+@keyframes bili-dl-slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.bili-dl-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #00a1d6, #0088cc);
+  color: #fff;
+}
+
+.bili-dl-title {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-right: 8px;
+}
+
+.bili-dl-close {
+  font-size: 20px;
+  cursor: pointer;
+  line-height: 1;
+  opacity: 0.8;
+  transition: opacity 0.2s;
+}
+
+.bili-dl-close:hover {
+  opacity: 1;
+}
+
+.bili-dl-info {
+  padding: 10px 16px;
+  color: #666;
+  font-size: 13px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.bili-dl-pages,
+.bili-dl-quality-section {
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.bili-dl-pages label,
+.bili-dl-quality-section label {
+  color: #333;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.bili-dl-pages select,
+.bili-dl-quality-section select {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 13px;
+  outline: none;
+  background: #fff;
+  cursor: pointer;
+}
+
+.bili-dl-pages select:focus,
+.bili-dl-quality-section select:focus {
+  border-color: #00a1d6;
+}
+
+.bili-dl-btn-download {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: calc(100% - 32px);
+  margin: 12px 16px;
+  padding: 10px;
+  background: linear-gradient(135deg, #00a1d6, #0088cc);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.bili-dl-btn-download:hover {
+  background: linear-gradient(135deg, #00b4eb, #0099dd);
+  box-shadow: 0 4px 12px rgba(0, 161, 214, 0.3);
+}
+
+.bili-dl-btn-download:active {
+  transform: scale(0.98);
+}
+
+.bili-dl-status {
+  padding: 0 16px 12px;
+  font-size: 12px;
+  color: #888;
+  text-align: center;
+  min-height: 20px;
+}
